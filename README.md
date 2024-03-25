@@ -1,6 +1,8 @@
 # Micro-repeater
 Two way radio FM micro repeater based on SA-818 modules
 
+![Bottom view of second prototype.](https://github.com/sq2dk/Micro-repeater/blob/main/repeater_1.jpg)
+
 This project is by no means complete and finalized. Care must be taken while reproducing, as design might have faults. For radio-amateur use only. You have to have license to experiment with radio transmissions and have to be aware of consequences of your actions!
 
 Repeater can be used to extend usable range of two way portable VHF/UHF radio by placing it in a convenient location between both radios. It consists of receiver (RX) and transmitter (TX) which work at the same time while TX is transmitting everything what is received by RX.
