@@ -29,9 +29,12 @@ unsigned long last_beep_time;
 unsigned long last_signal_change;
 unsigned long first_oscilation_time;
 unsigned long start_rx_delay;
+unsigned long last_transmit_time;
+
 boolean oscilation_detected = 0;
 uint8_t oscilation_count;
 uint8_t status_change_detected = 0;
+uint8_t power_save_mode = 0;
 
 uint8_t readSerialTimeout()
 {
@@ -292,7 +295,13 @@ uint8_t read_DTMF()
 
 void play_file_no(uint8_t filenumber)
 {
+  digitalWrite(TX_PD,HIGH);
   digitalWrite(TX_PTT,HIGH);  //switch on TX
+  if (power_save_mode) {   //if we are in power save mode, go back to normal
+    Serial.print(0x0B);
+    delay(500);}
+  power_save_mode = 0;
+
   if (!transmit_active) { delay(700); }                  //if not on, wait since it takes a long time to activate transmiter...
   myDFPlayer.play(filenumber);         //transmit reuested file 
   delay(200);                 //smoe more time to start playing...
@@ -301,6 +310,8 @@ void play_file_no(uint8_t filenumber)
   }
   if (!transmit_active){        //if we are not in the middle of transmission
     digitalWrite(TX_PTT,LOW);  //switch off TX
+    last_transmit_time = millis();
+   
   } 
 }
 
@@ -315,8 +326,13 @@ void play_number(float number, uint8_t vol_tem = 0)
   float_part=10*(number-number_to_play);
   boolean transmit_was_active=transmit_active;
 
-
+  digitalWrite(TX_PD,HIGH);
   digitalWrite(TX_PTT,HIGH);  //switch on TX
+  if (power_save_mode) {   //if we are in power save mode, go back to normal
+    Serial.print(0x0B);
+    delay(500);}
+  power_save_mode = 0;
+
   if (!transmit_active) delay(700);                  //if not on, wait since it takes a long time to activate transmiter...
   transmit_active=1;
   
@@ -341,7 +357,11 @@ void play_number(float number, uint8_t vol_tem = 0)
   }
   if ((vol_tem==1) || (vol_tem==2)) {play_file_no(3+(vol_tem*2));}
 
-  if (!transmit_was_active) digitalWrite(TX_PTT,LOW);
+  if (!transmit_was_active) {
+    digitalWrite(TX_PTT,LOW);
+    last_transmit_time = millis();
+    
+  }
   transmit_active=transmit_was_active;
 }
 
@@ -365,6 +385,7 @@ digitalWrite(Player_pin, HIGH);  //Transmitting only to MP3 player
 
  if ((transmit_active) && ((millis()-tail_timer) > 2000) && (digitalRead(RX_Af_out))) {  //if we are not receiving anything transmitting and more than 2000ms from last rx signal
   digitalWrite(TX_PTT,LOW);  //switch off TX
+  last_transmit_time = millis();
   transmit_active=0;         // set TX flag to 0
 
  }
@@ -385,6 +406,14 @@ digitalWrite(Player_pin, HIGH);  //Transmitting only to MP3 player
     play_number(RSSI_read, 3);
   }
   time_DTMF=millis();
+ }
+
+ if ((power_save_mode == 0) && (millis() > (last_transmit_time + power_save_delay))) {  //switch to power save mode (power down transmitter) after power_save_delay since last transmision
+  power_save_mode = 1;
+  digitalWrite(TX_PD, LOW);   //power down transmitter
+  //mp3 module should go to sleep as well...
+  Serial.print(0x0A);
+
  }
 
 
@@ -409,7 +438,9 @@ void RX_stats_change()
       if (continous_signal) {   //if signal was continous for this time
         
         transmit_active=1;
+        digitalWrite(TX_PD,HIGH);
         digitalWrite(TX_PTT,HIGH);
+        power_save_mode = 0;
      }
   }
 
@@ -450,6 +481,7 @@ void Signal_received(){              // function called on change of signal dete
     oscilation_detected = 1;
     transmit_active = 0;
     digitalWrite(TX_PTT,LOW);
+    last_transmit_time = millis();
   }
   if ((millis() - last_signal_change) > 500) { 
     oscilation_count = 0;

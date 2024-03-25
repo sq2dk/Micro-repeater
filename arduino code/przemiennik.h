@@ -31,7 +31,7 @@
 
 // Receier module configuration
 
-#define RX_frequency "145.1125"   //for x-band
+#define RX_frequency "145.1125"   //for cross-band
 //#define RX_freuency "430.5125"   //for 70cm only repeater
 #define RX_bandwith 0     // 0=12.5kHz, 1=25kHz
 #define RX_volume 6       //0=min, 8=max
@@ -40,7 +40,7 @@
 
 #define RX_delay 200     // 100ms - no avoid opening on super-short signals.
 
-#define TX_freuency "438.1125"  //for x-band
+#define TX_freuency "438.1125"  //for cross-band
 // #define TX_freuency "438.1125"  //for 70cm rpt
 #define TX_bandwith 0     // 0=12.5kHz, 1=25kHz
 #define TX_volume 3       //0=min, 8=max
@@ -53,4 +53,6 @@
 
 #define Repeater_callsign_time 600000   //in ms : 600000 - every 10 minutes
 //#define Repeater_callsign_time 60000   //in ms : 600000 - every 10 minutes
+
+#define power_save_delay 10000    //10s (10000ms)
 
