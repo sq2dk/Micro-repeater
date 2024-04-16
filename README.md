@@ -14,7 +14,7 @@ Repository consist of Kicad design files, Arduino code and whatever information 
 ### -Radio
 Small footprint and light weight is achieved by miniature RX/TX modules. Those are based around SDR based chip RDA1847, which is not perfect, but is basically self-contained two-way radio in itself. SA-818 modules consist also microcontroller and power amplifier to achieve about 1W output power. No RF output filtering is made, so at least low-pass filter should be added at the output of TX. RX achieving reasonable sensitivity (better than -120dBm). Communication and set-up of modules is done by serial communication (AT commands). 
 ### -Microcontroller
-Clone of Arduino pro-mini was used. Basically minimal computational power is required, so ATMega8 is more than enough. Small footprint and cost is another benefit. Downside is the programming interface, but almost any USB<->serial TTL interface can be used. Basically it was used, because it was on hand :-).
+Clone of Arduino pro-mini was used. Basically minimal computational power is required, so ATMega328 is more than enough. Small footprint and cost is another benefit. Downside is the programming interface, but almost any USB<->serial TTL interface can be used. Basically it was used, because it was on hand :-).
 ### -MP3 Player
 In some (most?) of the countries, repeaters are required to transmit their call signs aery now and then. This is done by employing small MP3 player module (MP3-TF-16P), which can play MP3 files stored on SD card. On this card various sound files are stored, which also allow transmitting numerical values (such as voltage, temperature etc) by voice. Communication with the module is done by serial protocol.
 ### -DTMF
