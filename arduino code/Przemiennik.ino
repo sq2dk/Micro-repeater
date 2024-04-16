@@ -2,6 +2,7 @@
 #include "mp3tf16p.h"       //mp3 player lib
 #include "OneWire.h"        // for temperature sesnor
 #include "DallasTemperature.h" // for temperature sesnor https://github.com/milesburton/Arduino-Temperature-Control-Library/
+#include "LowPower.h"
 
 
 
@@ -30,6 +31,7 @@ unsigned long last_signal_change;
 unsigned long first_oscilation_time;
 unsigned long start_rx_delay;
 unsigned long last_transmit_time;
+unsigned long callsign_timer;
 
 boolean oscilation_detected = 0;
 uint8_t oscilation_count;
@@ -181,6 +183,7 @@ void setup() {
 
   pinMode(RX_Af_out, INPUT);
   attachInterrupt(digitalPinToInterrupt(RX_Af_out), Signal_received, CHANGE);
+  //LowPower.attachInterruptWakeup(RX_Af_out), Signal_received, CHANGE);
 
   pinMode(DTMF_0, INPUT);
   pinMode(DTMF_1, INPUT);
@@ -231,9 +234,9 @@ void setup() {
       delay(0); // Code to compatible with ESP8266 watch dog.
     }
   }
-  myDFPlayer.volume(20);  //Set volume value. From 0 to 30
+  myDFPlayer.volume(15);  //Set volume value. From 0 to 30
   
-  play_file_no(1);  //play repeater callsign file (file No1)
+  if (Repeater_callsign_active) play_file_no(1);  //play repeater callsign file (file No1)
   
   
   digitalWrite(Player_pin, LOW); //finish transmitting to MP3 player
@@ -250,7 +253,7 @@ uint8_t read_RSSI()
   digitalWrite(Player_pin, LOW); //finish transmitting to MP3 player
 
   digitalWrite(Receiver_pin, HIGH); 
-	delay(100);
+	//delay(100);
 	Serial.print("RSSI?\r\n");
 	delay(100);
   unsigned long timeout = millis();
@@ -295,10 +298,12 @@ uint8_t read_DTMF()
 
 void play_file_no(uint8_t filenumber)
 {
-  digitalWrite(TX_PD,HIGH);
+  digitalWrite(Player_pin, HIGH);  //Transmitting only to MP3 player
+  digitalWrite(TX_PD,HIGH); //makes sure, that TX module is awake
   digitalWrite(TX_PTT,HIGH);  //switch on TX
   if (power_save_mode) {   //if we are in power save mode, go back to normal
     Serial.print(0x0B);
+    //Serial.print(0x7EFF060B000000EF); 
     delay(500);}
   power_save_mode = 0;
 
@@ -323,10 +328,12 @@ void play_number(float number, uint8_t vol_tem = 0)
   uint16_t number_to_play = number;
   uint8_t float_part;
 
+  digitalWrite(Player_pin, HIGH);  //Transmitting only to MP3 player
+  //Serial.print(0x0B); //wake up MP3 module
   float_part=10*(number-number_to_play);
   boolean transmit_was_active=transmit_active;
 
-  digitalWrite(TX_PD,HIGH);
+  digitalWrite(TX_PD,HIGH);  //makes sure, that TX module is awake
   digitalWrite(TX_PTT,HIGH);  //switch on TX
   if (power_save_mode) {   //if we are in power save mode, go back to normal
     Serial.print(0x0B);
@@ -336,8 +343,8 @@ void play_number(float number, uint8_t vol_tem = 0)
   if (!transmit_active) delay(700);                  //if not on, wait since it takes a long time to activate transmiter...
   transmit_active=1;
   
-  if ((vol_tem==1) || (vol_tem==2)) {play_file_no(2+(vol_tem*2));}
-  if (vol_tem==3) {play_file_no(8);}
+  if ((vol_tem==1) || (vol_tem==2)) {play_file_no(2+(vol_tem*2));}  //we are playing temperature / voltage
+  if (vol_tem==3) {play_file_no(8);} // or signal strength
   if (number_to_play>100) {
      hundreds=number_to_play/100;
      number_to_play=number_to_play-(hundreds*100);
@@ -355,7 +362,7 @@ void play_number(float number, uint8_t vol_tem = 0)
     play_file_no(9);  //przecinek
     play_file_no(float_part+10);
   }
-  if ((vol_tem==1) || (vol_tem==2)) {play_file_no(3+(vol_tem*2));}
+  if ((vol_tem==1) || (vol_tem==2)) {play_file_no(3+(vol_tem*2));}  //we are playing temperature / voltage
 
   if (!transmit_was_active) {
     digitalWrite(TX_PTT,LOW);
@@ -367,23 +374,23 @@ void play_number(float number, uint8_t vol_tem = 0)
 
 float read_voltage()
 {
-  return (analogRead(Analog_in)/40.1);        //10-bit - max value 1024 - 5V, voltage divider set to 5 (25Vin=1024)
+  return (analogRead(Analog_in)/40);        //10-bit - max value 1024 - 5V, voltage divider set to 5 (25Vin=1024) - input voltage divider 2k / 10k
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
-static unsigned long timer = millis();
-digitalWrite(Player_pin, HIGH);  //Transmitting only to MP3 player
+
+//digitalWrite(Player_pin, HIGH);  //Transmitting only to MP3 player
   
   if (status_change_detected) RX_stats_change();
 
-  if (millis() - timer > Repeater_callsign_time) {    //send repeater callsign enery...
-    timer = millis();
-    
+  if ((millis() - callsign_timer > Repeater_callsign_time) && (Repeater_callsign_active)) {    //send repeater callsign every Repeater_callsign_time
+    callsign_timer = millis();
+    //myDFPlayer.sendStack(0x0B);
     play_file_no(1);  //play repeater callsign file (file No1)
   }
 
- if ((transmit_active) && ((millis()-tail_timer) > 2000) && (digitalRead(RX_Af_out))) {  //if we are not receiving anything transmitting and more than 2000ms from last rx signal
+ if ((transmit_active) && (millis() > (tail_timer + 2000)) && (digitalRead(RX_Af_out))) {  //if we are not receiving anything transmitting and more than 2000ms from last rx signal
   digitalWrite(TX_PTT,LOW);  //switch off TX
   last_transmit_time = millis();
   transmit_active=0;         // set TX flag to 0
@@ -408,11 +415,19 @@ digitalWrite(Player_pin, HIGH);  //Transmitting only to MP3 player
   time_DTMF=millis();
  }
 
- if ((power_save_mode == 0) && (millis() > (last_transmit_time + power_save_delay))) {  //switch to power save mode (power down transmitter) after power_save_delay since last transmision
+ if ((power_save_enable) && (power_save_mode == 0) && (millis() > (last_transmit_time + power_save_delay)) && (!transmit_active)) {  //switch to power save mode (power down transmitter) after power_save_delay since last transmision
   power_save_mode = 1;
   digitalWrite(TX_PD, LOW);   //power down transmitter
-  //mp3 module should go to sleep as well...
-  Serial.print(0x0A);
+  digitalWrite(Receiver_pin, LOW);  // make sure, that we only talking to MP3 player
+  digitalWrite(Transmitter_pin, LOW);  //
+  digitalWrite(Player_pin, HIGH);  //Transmitting only to MP3 player
+  Serial.print(0x0A);  //mp3 module should go to sleep as well...
+   
+  delay(100);
+  digitalWrite(Player_pin, LOW);  //
+
+
+  LowPower.powerDown(SLEEP_FOREVER, ADC_OFF, BOD_OFF);    //puts arduino to sleep - wakes on hardware interrupt.
 
  }
 
@@ -421,34 +436,43 @@ digitalWrite(Player_pin, HIGH);  //Transmitting only to MP3 player
 
 void RX_stats_change()                   
 {
-    status_change_detected = 0;
+    status_change_detected = 0;   //clears status change flag to be ready for new event
 
     if ((!transmit_active) && (!digitalRead(RX_Af_out)) && (!oscilation_detected)) {    //begin of receiving (not transmiting)
     
-    uint8_t continous_signal = 1;
+       uint8_t continous_signal = 1;
     
-    start_rx_delay = millis();
+       start_rx_delay = millis();
+       //we cannot use nointerrupts, since it will disable millis()
     
+       delay(50);
 
-
-    while (millis() < (RX_delay + start_rx_delay)) 
-       {
-       if (digitalRead(RX_Af_out)) { continous_signal=0;}    //check if there is no braks in the signal for RX_delay preriod
-       }
-      if (continous_signal) {   //if signal was continous for this time
+       while (millis() < (RX_delay + start_rx_delay))   //checking if we have continous signal for RX_delay time...
+          {
+            if (digitalRead(RX_Af_out)) { continous_signal=0;}    //check if there is no braks in the signal for RX_delay preriod
+            if (status_change_detected) { continous_signal=0; }  //if in the meantime status have changed
+          }
+       if (continous_signal) {   //if signal was continous for this time
         
-        transmit_active=1;
-        digitalWrite(TX_PD,HIGH);
-        digitalWrite(TX_PTT,HIGH);
-        power_save_mode = 0;
-     }
-  }
+           transmit_active=1;
+           digitalWrite(TX_PD,HIGH);  //makes sure, that TX module is awake
+           digitalWrite(TX_PTT,HIGH);
+           power_save_mode = 0;
+           digitalWrite(Player_pin, HIGH);  //Transmitting only to MP3 player
+
+           Serial.print(0x0B);  //MP3 player in normal mode
+
+           delay(200);
+           last_transmit_time = millis();
+         }
+      
+    }
 
   if ((transmit_active) && (digitalRead(RX_Af_out))) {    //we are transmitting, but there is no more signal...
       //noInterrupts();        //temporarly disable interupts - not to call same function again...
       
       // beep only if, last signal change was >0.5s ago, last time beeped more tan minimum time and beep is enabled
-      if ((Beep_on) && ((millis() - last_beep_time) > minimum_beep_time) && ((millis() - last_signal_change) > 500)) {
+      if ((Beep_on) && (millis()  > (minimum_beep_time + last_beep_time)) && ((millis() - last_signal_change) > 500)) {
          myDFPlayer.play(beep_one+2);    //play beep of various tone
          last_beep_time = millis();
 
@@ -472,34 +496,32 @@ void Signal_received(){              // function called on change of signal dete
 //millis() is not changing values in this routine (ISR), so any routines using those have to be made outside of this space...
   
   //noInterrupts();
-
-  if ((millis() - last_signal_change) < 500) {   //if last change of signal was lestt than ... we need to check for oscilations
+if (osc_det_active)    //following only if oscilation detection is switched on
+{
+  if ((millis() ) < (last_signal_change + osc_det_timeout)) {   //if last change of signal was lestt than ... we need to check for oscilations
       if (oscilation_count==0) { first_oscilation_time = millis();}  //if this is first occurance, note the time
       oscilation_count++;  
   }
-  if (oscilation_count>8) { 
+  if (oscilation_count > 8) {   //if oscilations hae been detected, switch off transmitter
     oscilation_detected = 1;
     transmit_active = 0;
     digitalWrite(TX_PTT,LOW);
     last_transmit_time = millis();
   }
-  if ((millis() - last_signal_change) > 500) { 
+  if ((millis()) > (last_signal_change + osc_det_timeout)) { 
     oscilation_count = 0;
     oscilation_detected = 0;
   }
-
+}
  
 
   digitalWrite(LED_pin, !digitalRead(RX_Af_out));   // show status of signal on LED
-  
-    
-
-        
+      
 
 
-  status_change_detected = 1;
+  status_change_detected = 1;          //this informs main routine, that some status change was detected
 
-  last_signal_change = millis();
+  last_signal_change = millis();       //takes tiem of tat event
 
   
   
